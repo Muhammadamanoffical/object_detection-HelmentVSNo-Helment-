@@ -2,3 +2,5 @@ streamlit
 torch
 ultralytics
 Pillow
+PLT
+
