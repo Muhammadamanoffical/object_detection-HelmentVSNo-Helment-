@@ -1,24 +1,32 @@
 import os
 os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+os.environ["YOLO_VERBOSE"] = "False"
 
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
 
-
 st.title("Helmet vs No Helmet Detection")
 
-model = YOLO("best.pt")
+@st.cache_resource
+def load_model():
+    return YOLO("best.pt")
+
+model = load_model()
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image")
+if uploaded_file:
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    results = model.predict(image)
+    results = model.predict(
+        source=np.array(image),
+        save=False,
+        show=False,
+        verbose=False
+    )
+
     result_img = results[0].plot()
-
-    st.image(result_img, caption="Detection Result")
-
+    st.image(result_img, caption="Detection Result", use_container_width=True)
