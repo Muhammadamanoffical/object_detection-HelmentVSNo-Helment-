@@ -1,5 +1,6 @@
 streamlit
-ultralytics
-PLT
-
-
+ultralytics==8.0.196
+torch
+opencv-python-headless
+Pillow
+numpy
