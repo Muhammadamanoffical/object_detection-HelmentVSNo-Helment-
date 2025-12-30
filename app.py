@@ -1,11 +1,15 @@
 import os
-os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
-os.environ["YOLO_VERBOSE"] = "False"
+import torch
+from ultralytics.nn.tasks import DetectionModel
+torch.serialization.add_safe_globals([DetectionModel])
 
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
+
+# Optional: hide OpenCV errors
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 
 st.title("Helmet vs No Helmet Detection")
 
