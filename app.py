@@ -1,7 +1,11 @@
+import os
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
+
 
 st.title("Helmet vs No Helmet Detection")
 
@@ -17,3 +21,4 @@ if uploaded_file is not None:
     result_img = results[0].plot()
 
     st.image(result_img, caption="Detection Result")
+
