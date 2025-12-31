@@ -1,63 +1,104 @@
 import gradio as gr
-from ultralytics import YOLO
-import ultralytics
-import torch
 import cv2
+import PIL.Image
 import numpy as np
-import os
-import gdown
+from ultralytics import YOLO
+import pandas as pd
 
-# -----------------------------
-# Download model if not exists
-# -----------------------------
-if not os.path.exists("best.pt"):
-    url = "YOUR_GOOGLE_DRIVE_DIRECT_LINK"  # Replace with your file link
-    gdown.download(url, "best.pt", quiet=False)
+# --- Model Loading ---
+MODEL_PATH = "best (3).pt"
+try:
+    model = YOLO(MODEL_PATH)
+    print(f"Model loaded successfully from {MODEL_PATH}")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    model = None
 
-# -----------------------------
-# Load YOLO Model safely
-# -----------------------------
-@torch.no_grad()
-def load_model():
-    with torch.serialization.safe_globals([
-        ultralytics.nn.tasks.DetectionModel,
-        torch.nn.modules.container.Sequential,
-        torch.nn.modules.module.Module
-    ]):
-        model = YOLO("best.pt")  # Your fine-tuned model
-    return model
-
-model = load_model()
-
-# -----------------------------
-# Object Detection Function
-# -----------------------------
-def object_detection(image):
+def predict(image, conf_threshold, iou_threshold):
     """
-    image: numpy array
-    returns: numpy array with detections
+    Runs YOLO inference on the input image.
+    Args:
+        image: Input image (numpy array or PIL Image).
+        conf_threshold: Confidence threshold for detection.
+        iou_threshold: IoU threshold for NMS.
+    Returns:
+        Annotated image (numpy array), Class counts (dict/str), Detailed Data (DataFrame)
     """
-    results = model.predict(image, imgsz=640)  # Run prediction
-    detected_image = results[0].plot()         # Draw bounding boxes
+    if model is None:
+        return None, "Model not loaded.", None
 
-    # Convert BGR to RGB for Gradio display
-    if detected_image.shape[2] == 3:
-        detected_image = cv2.cvtColor(detected_image, cv2.COLOR_BGR2RGB)
+    try:
+        # Run inference
+        results = model.predict(image, conf=conf_threshold, iou=iou_threshold)
+        result = results[0]
+        
+        # Plot results
+        res_plotted = result.plot()
+        res_image = res_plotted[..., ::-1] # Convert BGR to RGB if needed, specifically for Gradio image output which usually expects RGB
+        
+        # Count classes
+        class_counts = {}
+        box_data = []
+        
+        for box in result.boxes:
+            cls = int(box.cls[0])
+            cls_name = model.names[cls]
+            class_counts[cls_name] = class_counts.get(cls_name, 0) + 1
+            
+            box_data.append({
+                "Class": cls_name,
+                "Confidence": float(box.conf[0]),
+                "Coordinates": [round(x, 1) for x in box.xyxy[0].tolist()]
+            })
+            
+        # Format class counts for display
+        counts_summary = pd.DataFrame(list(class_counts.items()), columns=['Class', 'Count'])
+        
+        # Detailed data
+        df = pd.DataFrame(box_data)
+        
+        return res_image, counts_summary, df
 
-    return detected_image
+    except Exception as e:
+        return None, f"Error: {e}", None
 
-# -----------------------------
-# Gradio Interface
-# -----------------------------
-app = gr.Interface(
-    fn=object_detection,
-    inputs=gr.Image(type="numpy", label="Upload Image"),
-    outputs=gr.Image(type="numpy", label="Detected Objects"),
-    title="🧠 Helmet Detection System",
-    description="Upload an image to detect objects (Helmet / No-Helmet)",
-    allow_flagging="never"
-)
+# --- Gradio UI ---
+def create_interface():
+    with gr.Blocks() as demo:
+        gr.Markdown(
+            """
+            # 👷 Safety Helmet Detection Pro
+            Upload an image to detect safety compliance (Head, Helmet, Person).
+            """
+        )
+        
+        with gr.Row():
+            with gr.Column():
+                input_image = gr.Image(label="Original Image", type="numpy")
+                conf_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.25, step=0.05, label="Confidence Threshold")
+                iou_slider = gr.Slider(minimum=0.0, maximum=1.0, value=0.45, step=0.05, label="IoU Threshold")
+                run_btn = gr.Button("🔍 Run Detection", variant="primary")
+            
+            with gr.Column():
+                output_image = gr.Image(label="Detected Output")
+                gr.Markdown("### 📊 Detection Statistics")
+                output_counts = gr.Dataframe(label="Class Counts")
+                output_details = gr.Dataframe(label="Detailed Detection Data")
 
-# Launch Gradio app
-app.launch()
+        run_btn.click(
+            fn=predict,
+            inputs=[input_image, conf_slider, iou_slider],
+            outputs=[output_image, output_counts, output_details]
+        )
+        
+        gr.Markdown("---")
+        gr.Markdown("Model: standard YOLOv8n (Custom Trained) | Classes: Head, Helmet, Person")
+
+    return demo
+
+if __name__ == "__main__":
+    demo = create_interface()
+   
+    demo.launch(theme=gr.themes.Soft()) # This relies on launch accepting theme?
     
+
