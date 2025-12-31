@@ -1,6 +1,4 @@
-gradio
+streamlit
 ultralytics
-torch
-opencv-python
-pillow
-gdown
+Pillow
+opencv-python-headless
